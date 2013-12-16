@@ -41,7 +41,7 @@ void loop()
         result1 = receiveData(rxData1, &len1, &srcAddress1, &destAddress1, (unsigned char *)&rssi1 , &lqi1);
         for(int i = 0; i< len1; i++)
         {
-            Serial.print(rxData1[i]);
+            Serial.write(rxData1[i]);
         }
     }
 

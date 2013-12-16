@@ -3,15 +3,26 @@
 #include <Wire.h>
 #include <HMC5883L.h>
 #include <Streaming.h>
+#include <Arduino.h>
+#include <EEPROM.h>
+#include <RFBeeSendRev.h>
+#include <RFBeeCore.h>
+
+
+const int LIGHT_ON_TIME = 60;			// 5s, 亮灯时间， 改变这里
+
 
 #define ST_IDLE         0               // 有拖鞋, 等待
 #define ST_ONLEAVE      1               // 离开区域，亮着灯
 #define ST_ONHERE       2               // 在区域亮灯
 
-
-
 #define HERE            0 
 #define LEAVE           1
+
+
+#define BEEPON()		digitalWrite(5, HIGH)
+#define BEEPOFF()		digitalWrite(5, LOW)
+
 
 // Store our compass as a variable.
 HMC5883L compass;
@@ -49,11 +60,17 @@ int isLeave()                    // 1:leave  0:here
 void lightOn()
 {
     cout << "Light On" << endl;
+	
+	unsigned char dtaUart[] = "ooooo";
+	RFBEE.sendDta(5, dtaUart);
 }
 
 void lightOff()
 {
     cout << "Light Off" << endl;
+	
+	unsigned char dtaUart[] = "ccccc";
+	RFBEE.sendDta(5, dtaUart);
 }
 
 int divOfReadings()
@@ -110,6 +127,13 @@ void stateMachine()
         
         if(isMove())
         {
+		
+			BEEPON();
+			delay(20);
+			
+			cout << "beep........." << endl;
+			BEEPOFF();
+			
             lightOn();
             if(waitStop())          // if leave
             {
@@ -119,6 +143,7 @@ void stateMachine()
             {
                 stChg(ST_ONHERE);
             }
+
         }
         
         break;
@@ -138,7 +163,7 @@ void stateMachine()
         
         case ST_ONHERE:
         
-        for(int i=0; i<50; i++)
+        for(int i=0; i<(LIGHT_ON_TIME*10); i++)
         {
             pushDta();
             delay(100);
@@ -167,12 +192,19 @@ void setup()
     // Initialize the serial port.
     Serial.begin(115200);
     
+	pinMode(10, OUTPUT);
+	pinMode(5, OUTPUT);
+	digitalWrite(5, LOW);
+    RFBEE.init();
+	
     delay(1000);
     
+	Serial.begin(115200);
     initCompass();
 }
 
 // Our main program loop.
+
 
 
 void loop()

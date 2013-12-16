@@ -16,8 +16,11 @@ void setup(){
 
     pinMode(10, OUTPUT);
     RFBEE.init();
-    Serial.begin(38400);
+    Serial.begin(115200);
     Serial.println("ok");
+	
+	pinMode(5, OUTPUT);
+	digitalWrite(5, LOW);
 }
 
 unsigned char rxData1[200];               // data len
@@ -30,6 +33,17 @@ int result1;
 
 unsigned char cntGetDta = 5;
 
+
+void openLight()
+{
+	digitalWrite(5, HIGH);
+}
+
+void closeLight()
+{
+	digitalWrite(5, LOW);
+}
+
 /*********************************************************************************************************
 ** Function name:           loop
 ** Descriptions:            loop
@@ -41,15 +55,21 @@ void loop()
         result1 = receiveData(rxData1, &len1, &srcAddress1, &destAddress1, (unsigned char *)&rssi1 , &lqi1);
         for(int i = 0; i< len1; i++)
         {
-            Serial.print(rxData1[i]);
+            Serial.write(rxData1[i]);
+			
+			if('o' == rxData1[i])			// get open
+			{
+				openLight();
+			}
+			else if('c' == rxData1[i])		// get close
+			{
+				closeLight();
+			}
         }
+		
+
     }
 
-    if(dtaUartLen)                          // serial get data
-    {
-        RFBEE.sendDta(dtaUartLen, dtaUart);
-        dtaUartLen = 0;
-    }
 
 }
 
