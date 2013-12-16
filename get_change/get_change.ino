@@ -4,37 +4,57 @@
 #include <HMC5883L.h>
 #include <Streaming.h>
 
-#define ST_IDLE         1               // 有拖鞋
-#define ST_MOVE         2               // 在变化
-#define ST_LEAVE        4               // 离开区域
-#define ST_LIGHTON      8               // 亮灯
+#define ST_IDLE         0               // 有拖鞋, 等待
+#define ST_ONLEAVE      1               // 离开区域，亮着灯
+#define ST_ONHERE       2               // 在区域亮灯
 
 
+
+#define HERE            0 
+#define LEAVE           1
 
 // Store our compass as a variable.
 HMC5883L compass;
 
 const int numReadings = 10;
 
-long readings[numReadings];         // the readings from the analog input
-int index = 0;                      // the index of the current reading
-long total = 0;                     // the running total
-long average = 0;                   // the average
+long readings[numReadings];             // the readings from the analog input
+int index       = 0;                    // the index of the current reading
+long total      = 0;                    // the running total
+long average    = 0;                    // the average
 
 int cnt_open = 0;
 
 
 int state = ST_IDLE;
 
-int val_origin = 0;                 // 初始值
+int val_origin = 0;                     // 初始值
 
-int isThereSlipper()                // 1: have slipper, 0: no slipper
+long time_tmp=0;
+
+
+
+int isLeave()                    // 1:leave  0:here
 {
     int tmp = average - val_origin;
-    if(abs(tmp) < 3)return 0;
-    return 1;
+    
+    cout << "average    = " << average << endl;
+    cout << "val_origin = " << val_origin << endl;
+    cout << "div_tmp    = " << abs(tmp) << endl;
+    if(abs(tmp) < 3)return LEAVE;
+    return HERE;
 }
 
+
+void lightOn()
+{
+    cout << "Light On" << endl;
+}
+
+void lightOff()
+{
+    cout << "Light Off" << endl;
+}
 
 int divOfReadings()
 {
@@ -50,10 +70,37 @@ int divOfReadings()
     return (max - min);
 }
 
+void stChg(int st)
+{
+    state = st;
+    
+    char str[3][10] = {"IDLE", "ONLEAVE", "ONHERE"};
+    cout << "STATE CHANGE -> " << str[st] << endl;
+}
+
 int isMove()
 {
-    
+    if(divOfReadings()>20)return 1;
+    return 0;
 }
+
+//1:leave   0:here
+int waitStop()                             // wait for stop
+{
+    int cnt = 0;
+    while(1)
+    {
+        pushDta();
+        cnt = isMove() ? 0 : cnt+1;
+        if(cnt > 50)
+        {
+            cout << "move stop" << endl;
+            return isLeave();
+        }
+        delay(100);
+    }
+}
+
 
 void stateMachine()
 {
@@ -61,23 +108,52 @@ void stateMachine()
     {
         case ST_IDLE:
         
+        if(isMove())
+        {
+            lightOn();
+            if(waitStop())          // if leave
+            {
+                stChg(ST_ONLEAVE);
+            }
+            else
+            {
+                stChg(ST_ONHERE);
+            }
+        }
         
         break;
         
-        case ST_MOVE:
         
         
+        case ST_ONLEAVE:
+
+        if(isMove())
+        {
+            stChg(ST_IDLE);
+            return;
+        }
         
         break;
         
         
-        case ST_LEAVE:
+        case ST_ONHERE:
         
-        break;
+        for(int i=0; i<50; i++)
+        {
+            pushDta();
+            delay(100);
+            
+            if(isMove())
+            {
+                stChg(ST_IDLE);
+                return;
+            }
+        }
         
-        
-        case ST_LIGHTON:
-        
+        cout << "goto bed" << endl;
+        lightOff();
+        stChg(ST_IDLE);
+
         break;
         
         default:
@@ -101,18 +177,32 @@ void setup()
 
 void loop()
 {
-#if 1
+
+    //cout << pushDta() << endl;
+    
+    //cout << "div = " << divOfReadings() << endl;
+    
+    pushDta();
+    
+    stateMachine();
+
+    delay(100);
+
+}
+
+
+int pushDta()
+{
+
+
     total= total - readings[index];         
     // read from the sensor:
     
-    
     long tmp = getCompass();
-    
 
 
     readings[index] = abs(tmp-average)>300 ? average : tmp;
-    
-    cout << readings[index] << '\t';
+
     //cout << readings[index] << endl;
     // add the reading to the total:
     
@@ -132,22 +222,10 @@ void loop()
 
     // calculate the average:
     average = total / numReadings;
-  
-    cout << average << endl << endl;
     
-    
-    cout << "div = " << divOfReadings() << endl;
-    
-    delay(70);
-    
-#else
+    return average;
 
-    cout << getCompass() << endl; 
-    delay(100);            
-    //of course it can be delayed longer.
-#endif
 }
-
 
 void initCompass()
 {
@@ -174,10 +252,17 @@ void initCompass()
     {
         readings[thisReading] = getCompass(); 
         total += readings[thisReading];
-        delay(100);
+        delay(70);
     }
     
-    val_origin = total/10;
+    
+    for(int i=0; i<20; i++)
+    {
+        pushDta();
+        delay(70);
+    }
+    
+    val_origin = average;
     
     cout << "val_origin = " << val_origin << endl;
     
