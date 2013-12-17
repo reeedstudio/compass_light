@@ -9,12 +9,14 @@
 #include <RFBeeCore.h>
 
 
-const int LIGHT_ON_TIME = 5;			// 5s, 亮灯时间， 改变这里
+const long LIGHT_ON_TIME = 5;			// 5s, 亮灯时间， 改变这里
 
+const long LIGHT_ON_TIME_WITHOUTBACK =  1000*20;//5*60*1000;           // 如果没有回来，5分钟后照常关灯
 
-#define __Dbg           0
+#define __Dbg           1
 
 #define ST_IDLE         0               // 有拖鞋, 等待
+#define ST_CHANGE       4               // 有变化
 #define ST_ONLEAVE      1               // 离开区域，亮着灯
 #define ST_ONHERE       2               // 在区域亮灯
 
@@ -45,6 +47,7 @@ int val_origin = 0;                     // 初始值
 
 long time_tmp=0;
 
+int cnt_move = 0;
 
 void beep()
 {
@@ -101,8 +104,9 @@ int divOfReadings()
 void stChg(int st)
 {
     state = st;
+    cnt_move = 0;
     
-    char str[3][10] = {"IDLE", "ONLEAVE", "ONHERE"};
+    char str[4][10] = {"IDLE", "ONLEAVE", "ONHERE", "CHANGE"};
     
 #if __Dbg
     cout << "STATE CHANGE -> " << str[st] << endl;
@@ -113,9 +117,9 @@ int isMove()
 {
 
 #if __Dbg
-    cout << divOfReadings() << endl;
+    //cout << divOfReadings() << endl;
 #endif
-    if(divOfReadings()>11)return 1;
+    if(divOfReadings()>10)return 1;
     return 0;
 }
 
@@ -139,19 +143,31 @@ int waitStop()                             // wait for stop
 }
 
 long timer_leave = 0;
+long dt_leave = 0;
+
 
 void stateMachine()
 {
     
     int cnt1 = 0;
     
+    
     switch(state)
     {
         case ST_IDLE:
         
+        cnt_move = 0;
         if(isMove())
         {
 		
+            for(int i=0; i<3; i++)
+            {
+                pushDta();
+                delay(67);
+            }
+            
+            if(!isMove())return;
+            
 			BEEPON();
 			delay(20);
 
@@ -168,24 +184,53 @@ void stateMachine()
             {
                 stChg(ST_ONHERE);
             }
-
         }
         
         break;
         
+        case ST_CHANGE:
         
+        cnt_move = 0;
+        
+        BEEPON();
+        delay(20);
+        BEEPOFF();
+            
+        if(waitStop())          // if leave
+        {
+            stChg(ST_ONLEAVE);
+            timer_leave = millis();
+                
+        }
+        else
+        {
+            stChg(ST_ONHERE);
+        }
+
+        
+        break;
         
         case ST_ONLEAVE:
 
         if(isMove())
         {
-            stChg(ST_IDLE);
-            return;
+            cnt_move++;
+            if(cnt_move > 10)
+            {
+                stChg(ST_CHANGE);
+                return;
+            }
         }
         
+        dt_leave = millis() - timer_leave;
         
-        if((millis() - timer_leave) > 1000*10*60)            // 如果10分钟没有回来，可能是触发失败，关灯。
+        cout << "dt_leave = " << dt_leave << endl;
+        
+        if(dt_leave > (600000))            // 如果10分钟没有回来，可能是触发失败，关灯。
         {
+#if __Dbg
+            cout << "no back, turn off anyway" << endl;
+#endif
             lightOff();
             stChg(ST_IDLE);
         }
@@ -227,8 +272,14 @@ void stateMachine()
             
             if(isMove())
             {
-                stChg(ST_IDLE);
-                return;
+                
+                cnt_move++;
+                
+                if(cnt_move > 10)
+                {
+                    stChg(ST_CHANGE);
+                    return;
+                }
             }
             
             if(isLeave())
