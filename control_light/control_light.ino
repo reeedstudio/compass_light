@@ -15,6 +15,13 @@ unsigned char dtaUartLen = 0;           // serial data length
 void setup(){
 
     pinMode(10, OUTPUT);
+    
+    pinMode(A2, OUTPUT);                // mosfet output low
+    pinMode(A3, OUTPUT);
+    digitalWrite(A2, LOW);
+    digitalWrite(A3, LOW);
+    
+    
     RFBEE.init();
     Serial.begin(115200);
     Serial.println("ok");

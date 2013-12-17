@@ -9,7 +9,7 @@
 #include <RFBeeCore.h>
 
 
-const int LIGHT_ON_TIME = 60;			// 5s, 亮灯时间， 改变这里
+const int LIGHT_ON_TIME = 5;			// 5s, 亮灯时间， 改变这里
 
 
 #define ST_IDLE         0               // 有拖鞋, 等待
@@ -43,6 +43,13 @@ int val_origin = 0;                     // 初始值
 
 long time_tmp=0;
 
+
+void beep()
+{
+    BEEPON();
+    delay(20);
+    BEEPOFF();
+}
 
 
 int isLeave()                    // 1:leave  0:here
@@ -84,6 +91,7 @@ int divOfReadings()
         if(min >= readings[i])min = readings[i];
     }
     
+    //cout << max - min << endl;
     return (max - min);
 }
 
@@ -97,7 +105,7 @@ void stChg(int st)
 
 int isMove()
 {
-    if(divOfReadings()>20)return 1;
+    if(divOfReadings()>10)return 1;
     return 0;
 }
 
@@ -121,6 +129,9 @@ int waitStop()                             // wait for stop
 
 void stateMachine()
 {
+    
+    int cnt1 = 0;
+    
     switch(state)
     {
         case ST_IDLE:
@@ -158,6 +169,32 @@ void stateMachine()
             return;
         }
         
+        
+        if(!isLeave())
+        {
+            while(1)
+            {
+                pushDta();
+                delay(100);
+                
+                if(!isLeave())
+                {
+                    cnt1++;
+                }
+                else
+                {
+                    return ;
+                }
+                
+                if(cnt1 > 10)
+                {
+                    stChg(ST_ONHERE);
+                    return;
+                }
+            }
+        }
+       
+        
         break;
         
         
@@ -173,6 +210,31 @@ void stateMachine()
                 stChg(ST_IDLE);
                 return;
             }
+            
+            if(isLeave())
+            {
+                while(1)
+                {
+                    pushDta();
+                    delay(100);
+                    
+                    if(isLeave())
+                    {
+                        cnt1++;
+                    }
+                    else
+                    {
+                        return ;
+                    }
+                    
+                    if(cnt1 > 5)
+                    {
+                        stChg(ST_ONLEAVE);
+                        return;
+                    }
+                }
+            }
+        
         }
         
         cout << "goto bed" << endl;
@@ -196,11 +258,27 @@ void setup()
 	pinMode(5, OUTPUT);
 	digitalWrite(5, LOW);
     RFBEE.init();
+    
+    pinMode(A2, OUTPUT);            // mosfet output low
+    pinMode(A3, OUTPUT);
+    digitalWrite(A2, LOW);
+    digitalWrite(A3, LOW);
 	
-    delay(1000);
+    lightOff();
+    delay(1500);
+    
+    beep();
     
 	Serial.begin(115200);
     initCompass();
+    
+    
+    beep();
+    delay(100);
+    beep();
+    
+    
+    delay(500);
 }
 
 // Our main program loop.
@@ -233,6 +311,8 @@ int pushDta()
     long tmp = getCompass();
 
 
+    // cout <<"tmp = " << tmp << endl;
+    
     readings[index] = abs(tmp-average)>300 ? average : tmp;
 
     //cout << readings[index] << endl;
@@ -282,16 +362,17 @@ void initCompass()
     
     for (int thisReading = 0; thisReading < numReadings; thisReading++)
     {
-        readings[thisReading] = getCompass(); 
+        readings[thisReading] = getCompass();
         total += readings[thisReading];
-        delay(70);
+        delay(100);
     }
     
     
-    for(int i=0; i<20; i++)
+    
+    for(int i=0; i<40; i++)
     {
         pushDta();
-        delay(70);
+        delay(100);
     }
     
     val_origin = average;
