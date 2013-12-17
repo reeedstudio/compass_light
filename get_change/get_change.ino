@@ -160,11 +160,9 @@ void stateMachine()
         if(isMove())
         {
 		
-            for(int i=0; i<3; i++)
-            {
-                pushDta();
-                delay(67);
-            }
+            delay(67);
+            pushDta();
+            delay(67);
             
             if(!isMove())return;
             
@@ -254,6 +252,9 @@ void stateMachine()
                 if(cnt1 > 10)
                 {
                     stChg(ST_ONHERE);
+                    BEEPON();
+                    delay(20);
+                    BEEPOFF();
                     return;
                 }
             }
