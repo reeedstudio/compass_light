@@ -79,7 +79,7 @@ void loop()
 
 
 }
-
+/*
 void serialEvent() 
 {
     while (Serial.available()) 
@@ -87,7 +87,7 @@ void serialEvent()
         dtaUart[dtaUartLen++] = (unsigned char)Serial.read();  
     }
 
-}
+}*/
 
 /*********************************************************************************************************
   END FILE

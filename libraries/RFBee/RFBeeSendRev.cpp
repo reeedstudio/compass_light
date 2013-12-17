@@ -34,13 +34,13 @@ void rfbeeSendRev::init()
     if (Config.initialized() != OK)
     {
 
-		Serial.begin(38400);
-		Serial.println("Initializing config");
+		//Serial.begin(38400);
+		//Serial.println("Initializing config");
         Config.reset();
     }
     else
     {
-		Serial.begin(38400);
+		//Serial.begin(38400);
     }
     CCx.PowerOnStartUp();
     setCCxConfig();

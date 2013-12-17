@@ -12,6 +12,8 @@
 const int LIGHT_ON_TIME = 5;			// 5s, 亮灯时间， 改变这里
 
 
+#define __Dbg           0
+
 #define ST_IDLE         0               // 有拖鞋, 等待
 #define ST_ONLEAVE      1               // 离开区域，亮着灯
 #define ST_ONHERE       2               // 在区域亮灯
@@ -55,10 +57,13 @@ void beep()
 int isLeave()                    // 1:leave  0:here
 {
     int tmp = average - val_origin;
-    
+
+#if __Dbg
     cout << "average    = " << average << endl;
     cout << "val_origin = " << val_origin << endl;
     cout << "div_tmp    = " << abs(tmp) << endl;
+#endif
+
     if(abs(tmp) < 3)return LEAVE;
     return HERE;
 }
@@ -66,16 +71,14 @@ int isLeave()                    // 1:leave  0:here
 
 void lightOn()
 {
-    cout << "Light On" << endl;
-	
+
 	unsigned char dtaUart[] = "ooooo";
 	RFBEE.sendDta(5, dtaUart);
 }
 
 void lightOff()
 {
-    cout << "Light Off" << endl;
-	
+
 	unsigned char dtaUart[] = "ccccc";
 	RFBEE.sendDta(5, dtaUart);
 }
@@ -91,7 +94,7 @@ int divOfReadings()
         if(min >= readings[i])min = readings[i];
     }
     
-    //cout << max - min << endl;
+
     return (max - min);
 }
 
@@ -100,12 +103,19 @@ void stChg(int st)
     state = st;
     
     char str[3][10] = {"IDLE", "ONLEAVE", "ONHERE"};
+    
+#if __Dbg
     cout << "STATE CHANGE -> " << str[st] << endl;
+#endif
 }
 
 int isMove()
 {
-    if(divOfReadings()>10)return 1;
+
+#if __Dbg
+    cout << divOfReadings() << endl;
+#endif
+    if(divOfReadings()>11)return 1;
     return 0;
 }
 
@@ -119,13 +129,16 @@ int waitStop()                             // wait for stop
         cnt = isMove() ? 0 : cnt+1;
         if(cnt > 50)
         {
+#if __Dbg
             cout << "move stop" << endl;
+#endif
             return isLeave();
         }
         delay(100);
     }
 }
 
+long timer_leave = 0;
 
 void stateMachine()
 {
@@ -141,14 +154,15 @@ void stateMachine()
 		
 			BEEPON();
 			delay(20);
-			
-			cout << "beep........." << endl;
+
 			BEEPOFF();
 			
             lightOn();
             if(waitStop())          // if leave
             {
                 stChg(ST_ONLEAVE);
+                timer_leave = millis();
+                
             }
             else
             {
@@ -169,6 +183,12 @@ void stateMachine()
             return;
         }
         
+        
+        if((millis() - timer_leave) > 1000*10*60)            // 如果10分钟没有回来，可能是触发失败，关灯。
+        {
+            lightOff();
+            stChg(ST_IDLE);
+        }
         
         if(!isLeave())
         {
@@ -230,14 +250,16 @@ void stateMachine()
                     if(cnt1 > 5)
                     {
                         stChg(ST_ONLEAVE);
+                        timer_leave = millis();
                         return;
                     }
                 }
             }
         
         }
-        
+#if __Dbg 
         cout << "goto bed" << endl;
+#endif
         lightOff();
         stChg(ST_IDLE);
 
@@ -251,9 +273,7 @@ void stateMachine()
 
 void setup()
 {
-    // Initialize the serial port.
-    Serial.begin(115200);
-    
+
 	pinMode(10, OUTPUT);
 	pinMode(5, OUTPUT);
 	digitalWrite(5, LOW);
@@ -268,8 +288,11 @@ void setup()
     delay(1500);
     
     beep();
-    
-	Serial.begin(115200);
+
+#if __Dbg
+    Serial.begin(115200);
+#endif
+
     initCompass();
     
     
@@ -288,10 +311,7 @@ void setup()
 void loop()
 {
 
-    //cout << pushDta() << endl;
-    
-    //cout << "div = " << divOfReadings() << endl;
-    
+
     pushDta();
     
     stateMachine();
@@ -309,21 +329,12 @@ int pushDta()
     // read from the sensor:
     
     long tmp = getCompass();
-
-
-    // cout <<"tmp = " << tmp << endl;
-    
+ 
     readings[index] = abs(tmp-average)>300 ? average : tmp;
 
-    //cout << readings[index] << endl;
-    // add the reading to the total:
     
     total = total + readings[index];   
 
-    //cout << "total = " << total << endl; 
-    
-    // advance to the next position in the array:  
-    
     index = index + 1;          
 
     //cout << "index = " << index << endl;
@@ -350,14 +361,14 @@ void initCompass()
     
     if(error != 0)                                                  // If there is an error, print it out.
     {
-        Serial.println(compass.getErrorText(error));
+        //Serial.println(compass.getErrorText(error));
     }
     
     error = compass.setMeasurementMode(MEASUREMENT_CONTINUOUS);     // Set the measurement mode to Continuous
     
     if(error != 0)                                                  // If there is an error, print it out.
     {
-        Serial.println(compass.getErrorText(error));
+        //Serial.println(compass.getErrorText(error));
     }
     
     for (int thisReading = 0; thisReading < numReadings; thisReading++)
@@ -377,9 +388,10 @@ void initCompass()
     
     val_origin = average;
     
+#if __Dbg
     cout << "val_origin = " << val_origin << endl;
-    
     cout <<"init ok" << endl;
+#endif
 }
 
 int getCompass()
