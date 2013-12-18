@@ -117,7 +117,7 @@ int isMove()
 {
 
 #if __Dbg
-    //cout << divOfReadings() << endl;
+    cout << divOfReadings() << endl;
 #endif
     if(divOfReadings()>10)return 1;
     return 0;
@@ -165,6 +165,21 @@ void stateMachine()
             delay(67);
             
             if(!isMove())return;
+			
+			bool flg_tmp=0;
+			
+			for(int i=0; i<10; i++)
+			{
+				pushDta();
+				delay(67);
+				if(isMove())
+				{
+					flg_tmp = 1;
+					break;
+				}
+			}
+			
+			if(!flg_tmp)return;
             
 			BEEPON();
 			delay(20);
@@ -354,6 +369,16 @@ void setup()
     
     
     delay(500);
+	
+	
+	while(1)
+	{
+		if(!isLeave())
+		{
+			beep();
+			break;			
+		}
+	}
 }
 
 // Our main program loop.
