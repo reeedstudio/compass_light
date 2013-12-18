@@ -9,9 +9,9 @@
 #include <RFBeeCore.h>
 
 
-const long LIGHT_ON_TIME = 5;			// 5s, 亮灯时间， 改变这里
+const long LIGHT_ON_TIME = 3;			// 5s, 亮灯时间， 改变这里
 
-const long LIGHT_ON_TIME_WITHOUTBACK =  1000*20;//5*60*1000;           // 如果没有回来，5分钟后照常关灯
+const long LIGHT_ON_TIME_WITHOUTBACK =  1000*30*60;//5*60*1000;           // 如果没有回来，5分钟后照常关灯
 
 #define __Dbg           1
 
@@ -131,7 +131,7 @@ int waitStop()                             // wait for stop
     {
         pushDta();
         cnt = isMove() ? 0 : cnt+1;
-        if(cnt > 50)
+        if(cnt > 30)
         {
 #if __Dbg
             cout << "move stop" << endl;
@@ -157,24 +157,20 @@ void stateMachine()
         case ST_IDLE:
         
         cnt_move = 0;
-        if(isMove())
+        if(isLeave() || isMove())
         {
 		
-            delay(67);
-            pushDta();
-            delay(67);
-            
-            if(!isMove())return;
-			
-			bool flg_tmp=0;
+			int flg_tmp=0;
 			
 			for(int i=0; i<10; i++)
 			{
 				pushDta();
 				delay(67);
-				if(isMove())
+				if(isLeave() || isMove())
 				{
-					flg_tmp = 1;
+					flg_tmp++;
+					
+					if(flg_tmp > 2)
 					break;
 				}
 			}
@@ -183,7 +179,6 @@ void stateMachine()
             
 			BEEPON();
 			delay(20);
-
 			BEEPOFF();
 			
             lightOn();
@@ -239,7 +234,7 @@ void stateMachine()
         
         cout << "dt_leave = " << dt_leave << endl;
         
-        if(dt_leave > (600000))            // 如果10分钟没有回来，可能是触发失败，关灯。
+        if(dt_leave > (LIGHT_ON_TIME_WITHOUTBACK))            // 如果xxx时间没有回来，可能是触发失败，关灯。
         {
 #if __Dbg
             cout << "no back, turn off anyway" << endl;
@@ -367,18 +362,28 @@ void setup()
     delay(100);
     beep();
     
-    
     delay(500);
 	
-	
+	int cnt_1 = 0;
 	while(1)
 	{
 		if(!isLeave())
 		{
-			beep();
-			break;			
+			cnt_1++;
 		}
+		
+		if(cnt_1 > 10)
+		{
+			break;
+		}
+		
+		pushDta();
+		delay(100);
 	}
+	
+	waitStop();
+	beep();
+	
 }
 
 // Our main program loop.
