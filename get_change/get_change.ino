@@ -9,23 +9,24 @@
 #include <RFBeeCore.h>
 
 
-const long LIGHT_ON_TIME = 3;			// 5s, 亮灯时间， 改变这里
+const long LIGHT_ON_TIME = 3;			                            // 5s, 亮灯时间， 改变这里
 
-const long LIGHT_ON_TIME_WITHOUTBACK =  1000*30*60;//5*60*1000;           // 如果没有回来，5分钟后照常关灯
+const long LIGHT_ON_TIME_WITHOUTBACK =  1000*30*60;//5*60*1000;     // 如果没有回来，xx分钟后照常关灯
 
-#define __Dbg           1
+#define __Dbg           1                                           // 是否需要调试信息，如果不需要，改成0
 
-#define ST_IDLE         0               // 有拖鞋, 等待
-#define ST_CHANGE       4               // 有变化
+// 几种状态
+#define ST_IDLE         0               // 有拖鞋静止在附近, 等待
+#define ST_CHANGE       4               // 变化
 #define ST_ONLEAVE      1               // 离开区域，亮着灯
 #define ST_ONHERE       2               // 在区域亮灯
 
-#define HERE            0 
-#define LEAVE           1
+#define HERE            0               // 原地
+#define LEAVE           1               // 离开
 
 
-#define BEEPON()		digitalWrite(5, HIGH)
-#define BEEPOFF()		digitalWrite(5, LOW)
+#define BEEPON()		digitalWrite(5, HIGH)       // 蜂鸣器开
+#define BEEPOFF()		digitalWrite(5, LOW)        // 蜂鸣器关
 
 
 // Store our compass as a variable.
@@ -33,22 +34,20 @@ HMC5883L compass;
 
 const int numReadings = 10;
 
+// 用的是一个平滑滤波，参考这里：http://arduino.cc/en/Tutorial/Smoothing
 long readings[numReadings];             // the readings from the analog input
 int index       = 0;                    // the index of the current reading
 long total      = 0;                    // the running total
 long average    = 0;                    // the average
 
-int cnt_open = 0;
 
-
-int state = ST_IDLE;
+int state = ST_IDLE;                    // 状态
 
 int val_origin = 0;                     // 初始值
 
-long time_tmp=0;
-
 int cnt_move = 0;
 
+// 蜂鸣器响20ms
 void beep()
 {
     BEEPON();
@@ -57,7 +56,9 @@ void beep()
 }
 
 
-int isLeave()                    // 1:leave  0:here
+// 判断是否离开，如果传感器值和初始值相差小于3，认为离开了
+// 返回1：离开， 返回0： 没有里开
+int isLeave()        
 {
     int tmp = average - val_origin;
 
@@ -71,7 +72,7 @@ int isLeave()                    // 1:leave  0:here
     return HERE;
 }
 
-
+// 发送命令亮灯，发送五个o
 void lightOn()
 {
 
@@ -79,6 +80,7 @@ void lightOn()
 	RFBEE.sendDta(5, dtaUart);
 }
 
+// 发送命令关灯，发送五个c
 void lightOff()
 {
 
@@ -86,21 +88,8 @@ void lightOff()
 	RFBEE.sendDta(5, dtaUart);
 }
 
-int divOfReadings()
-{
-    int max = 0;
-    int min = 5000;
-    
-    for(int i=0; i<numReadings; i++)
-    {
-        if(max <= readings[i])max = readings[i];
-        if(min >= readings[i])min = readings[i];
-    }
-    
 
-    return (max - min);
-}
-
+// 状态切换
 void stChg(int st)
 {
     state = st;
@@ -113,6 +102,22 @@ void stChg(int st)
 #endif
 }
 
+// 数据缓冲区最大值和最小值的差
+int divOfReadings()
+{
+    int max = 0;
+    int min = 5000;
+    
+    for(int i=0; i<numReadings; i++)
+    {
+        if(max <= readings[i])max = readings[i];
+        if(min >= readings[i])min = readings[i];
+    }
+    
+    return (max - min);
+}
+
+// 是否移动，如果divOfReadings()返回大于10，认为有移动
 int isMove()
 {
 
@@ -123,7 +128,7 @@ int isMove()
     return 0;
 }
 
-//1:leave   0:here
+// 等待静止，如果3s内 isMove()返回的数据为0，说明已经静止了
 int waitStop()                             // wait for stop
 {
     int cnt = 0;
@@ -145,7 +150,7 @@ int waitStop()                             // wait for stop
 long timer_leave = 0;
 long dt_leave = 0;
 
-
+// 状态机函数，管理状态之间的切换
 void stateMachine()
 {
     
@@ -154,48 +159,51 @@ void stateMachine()
     
     switch(state)
     {
+        // ------------------------------------- 静止 --------------------------------
         case ST_IDLE:
         
         cnt_move = 0;
-        if(isLeave() || isMove())
+        if(isLeave() || isMove())               // 是否离开或者有移动
         {
 		
 			int flg_tmp=0;
 			
-			for(int i=0; i<10; i++)
+			for(int i=0; i<10; i++)             
 			{
 				pushDta();
 				delay(67);
-				if(isLeave() || isMove())
+				if(isLeave() || isMove())       // 再次判断是否离开或者有移动，以防止干扰
 				{
-					flg_tmp++;
+					flg_tmp++;                  // 检测到一次，flg_tmp自增
 					
-					if(flg_tmp > 2)
+					if(flg_tmp > 2)             // 当flg_tmp大于2的时候，认为真的离开或者真的有移动
 					break;
 				}
 			}
 			
-			if(!flg_tmp)return;
+			if(flg_tmp<3)return;                // 误判，返回
             
-			BEEPON();
+			BEEPON();                           // 蜂鸣器响，作为提示
 			delay(20);
 			BEEPOFF();
 			
-            lightOn();
-            if(waitStop())          // if leave
+            lightOn();                          // 开灯
+            
+            if(waitStop())                      // 等待静止
             {
-                stChg(ST_ONLEAVE);
+                stChg(ST_ONLEAVE);              // 状态切换到灯亮，离开状态
                 timer_leave = millis();
                 
             }
             else
             {
-                stChg(ST_ONHERE);
+                stChg(ST_ONHERE);               // 状态切换到灯亮，没有离开状态     
             }
         }
         
         break;
         
+        // ------------------------------------- 变化 --------------------------------
         case ST_CHANGE:
         
         cnt_move = 0;
@@ -218,9 +226,10 @@ void stateMachine()
         
         break;
         
+        // ------------------------------------- 灯亮，离开 --------------------------------
         case ST_ONLEAVE:
 
-        if(isMove())
+        if(isMove())                                            // 是否有移动
         {
             cnt_move++;
             if(cnt_move > 10)
@@ -234,7 +243,7 @@ void stateMachine()
         
         cout << "dt_leave = " << dt_leave << endl;
         
-        if(dt_leave > (LIGHT_ON_TIME_WITHOUTBACK))            // 如果xxx时间没有回来，可能是触发失败，关灯。
+        if(dt_leave > (LIGHT_ON_TIME_WITHOUTBACK))            // 如果xxx时间没有回来，可能是触发失败或者睡不着看电视去了，关灯。
         {
 #if __Dbg
             cout << "no back, turn off anyway" << endl;
@@ -243,9 +252,9 @@ void stateMachine()
             stChg(ST_IDLE);
         }
         
-        if(!isLeave())
-        {
-            while(1)
+        if(!isLeave())                                      // 判断是否离开，（或者回来了没）
+        {                                                   // 下面的代码主要是为了保证是不是判断错了
+            while(1)                                        // 如果发现应该是ST_ONHERE的，那么切换过去
             {
                 pushDta();
                 delay(100);
@@ -261,7 +270,7 @@ void stateMachine()
                 
                 if(cnt1 > 10)
                 {
-                    stChg(ST_ONHERE);
+                    stChg(ST_ONHERE);                      
                     BEEPON();
                     delay(20);
                     BEEPOFF();
@@ -273,15 +282,15 @@ void stateMachine()
         
         break;
         
-        
+        // ------------------------------------- 灯亮，没有离开 --------------------------------
         case ST_ONHERE:
         
-        for(int i=0; i<(LIGHT_ON_TIME*10); i++)
+        for(int i=0; i<(LIGHT_ON_TIME*10); i++)             // 开始倒计时， 准备关灯
         {
             pushDta();
             delay(100);
             
-            if(isMove())
+            if(isMove())                                    // 如果有动
             {
                 
                 cnt_move++;
@@ -293,7 +302,7 @@ void stateMachine()
                 }
             }
             
-            if(isLeave())
+            if(isLeave())                                   // 突然离开了
             {
                 while(1)
                 {
@@ -322,7 +331,7 @@ void stateMachine()
 #if __Dbg 
         cout << "goto bed" << endl;
 #endif
-        lightOff();
+        lightOff();                                             // 顺利计时完毕，关灯睡觉
         stChg(ST_IDLE);
 
         break;
@@ -365,7 +374,8 @@ void setup()
     delay(500);
 	
 	int cnt_1 = 0;
-	while(1)
+    
+	while(1)                                // 等待拖鞋回来
 	{
 		if(!isLeave())
 		{
@@ -389,20 +399,19 @@ void setup()
 // Our main program loop.
 
 
-
 void loop()
 {
 
 
-    pushDta();
+    pushDta();                                      // 采集一个数据
     
-    stateMachine();
-
-    delay(100);
+    stateMachine();                                 // 状态机
+    
+    delay(100);                                     // 延时
 
 }
 
-
+// 采集数据，采用了平滑滤波算法
 int pushDta()
 {
 
@@ -432,6 +441,7 @@ int pushDta()
 
 }
 
+//初始化电子罗盘
 void initCompass()
 {
     
@@ -476,6 +486,7 @@ void initCompass()
 #endif
 }
 
+// 获得电子罗盘数据，0-3600， 表示0-360度，为了提高精度，乘10了
 int getCompass()
 {
     MagnetometerRaw raw = compass.readRawAxis();
